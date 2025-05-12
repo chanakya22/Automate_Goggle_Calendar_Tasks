@@ -9,31 +9,39 @@ try:
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
 except ImportError:
+    # If packages are missing, install them automatically
     print("Required packages not found. Installing...")
     os.system(f"{sys.executable} -m pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib")
     from googleapiclient.discovery import build
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
 
-# Authenticate and build the service
+# Google Calendar API scopes and credential paths
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 CREDENTIALS_PATH = os.path.join(os.path.dirname(__file__), 'credentials.json')
 TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'token.json')
 
-# Check if token.json exists
+# Authenticate with Google Calendar API
 if os.path.exists(TOKEN_PATH):
+    # Use existing token if available
     creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 else:
-    # Run the OAuth flow to generate token.json
+    # Run OAuth flow to generate token.json
     flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
     creds = flow.run_local_server(port=0)
     # Save the credentials for future use
     with open(TOKEN_PATH, 'w') as token:
         token.write(creds.to_json())
 
+# Build the Google Calendar service
 service = build('calendar', 'v3', credentials=creds)
 
 def delete_events_from_file(calendar_id, file_path):
+    """
+    Reads events to delete from a file and deletes them from Google Calendar.
+    Handles both single and recurring events (cancelling only the specified instance).
+    Each line in the file should be: <start> - <end> - <event summary>
+    """
     try:
         print(f"Reading events from file: {file_path}")
         with open(file_path, 'r') as file:
@@ -49,6 +57,7 @@ def delete_events_from_file(calendar_id, file_path):
                 event_summary = ' - '.join(event_details[2:]).strip()
                 print(f"Using timeMin: {time_min}, timeMax: {time_max}, and eventSummary: {event_summary}")
 
+                # Search for matching events in the calendar
                 print(f"API Call: service.events().list(calendarId={calendar_id}, timeMin={time_min}, timeMax={time_max}, q={event_summary}, singleEvents=True)")
                 events_result = service.events().list(
                     calendarId=calendar_id,
@@ -64,6 +73,7 @@ def delete_events_from_file(calendar_id, file_path):
                 for item in items:
                     print(f"Event found: {item.get('summary')} with ID: {item.get('id')}")
                     if item['summary'] == event_summary:
+                        # Handle recurring event instance cancellation
                         if 'recurringEventId' in item and 'originalStartTime' in item:
                             recurring_id = item['recurringEventId']
                             original_start = item['originalStartTime']
@@ -74,6 +84,7 @@ def delete_events_from_file(calendar_id, file_path):
                                 'originalStartTime': {},
                                 'status': 'cancelled'
                             }
+                            # Set correct fields for single instance cancellation
                             if 'dateTime' in original_start:
                                 resource['originalStartTime']['dateTime'] = original_start['dateTime']
                                 if 'timeZone' in original_start:
@@ -95,6 +106,7 @@ def delete_events_from_file(calendar_id, file_path):
                             ).execute()
                             print(f"Successfully cancelled single instance of recurring event: {event_summary}")
                         else:
+                            # Delete single (non-recurring) event
                             print(f"Deleting event: {event_summary} from {time_min} to {time_max}")
                             service.events().delete(
                                 calendarId=calendar_id,
@@ -113,21 +125,17 @@ def delete_events_from_file(calendar_id, file_path):
 OUTPUT_FILE_PATH = os.path.join(os.path.dirname(__file__), 'daily_schedule.txt')
 
 def download_daily_schedule(calendar_id, date):
+    """
+    Downloads the daily schedule for the given date and saves it to daily_schedule.txt.
+    Each event is written as: <start> - <end> - <event summary>
+    """
     try:
-        # Check if the schedule has already been downloaded for the day
-        # if os.path.exists(OUTPUT_FILE_PATH):
-        #     with open(OUTPUT_FILE_PATH, 'r') as file:
-        #         first_line = file.readline().strip()
-        #         if first_line.startswith(f"# Schedule for {date}"):
-        #             print(f"Schedule for {date} is already downloaded. Skipping download.")
-        #             return
-
         # Write a header to indicate the schedule date
         with open(OUTPUT_FILE_PATH, 'w') as file:
             file.write(f"# Schedule for {date}\n")
 
         # Convert the date to the start and end of the day in local timezone
-        local_tz = pytz.timezone('America/Chicago')  # Replace with your timezone
+        local_tz = pytz.timezone('America/Chicago')  # Replace with your timezone if needed
         start_of_day = local_tz.localize(datetime.strptime(date, '%Y-%m-%d'))
         end_of_day = start_of_day + timedelta(days=1) - timedelta(seconds=1)
 
@@ -143,8 +151,6 @@ def download_daily_schedule(calendar_id, date):
             time_min = start_of_hour.astimezone(pytz.utc).isoformat()
             time_max = end_of_hour.astimezone(pytz.utc).isoformat()
 
-            # print(f"Fetching events for hour: {hour:02d}:00 to {hour:02d}:59")
-
             # Fetch events for the specified hour
             events_result = service.events().list(
                 calendarId=calendar_id,
@@ -158,35 +164,27 @@ def download_daily_schedule(calendar_id, date):
             # Append events to the output file
             with open(OUTPUT_FILE_PATH, 'a') as file:
                 if not events:
-                    # file.write(f"No events found for hour {hour:02d}:00 to {hour:02d}:59.\n")
                     continue
                 else:
                     for event in events:
                         start = event['start'].get('dateTime', event['start'].get('date'))
                         end = event['end'].get('dateTime', event['end'].get('date'))
                         file.write(f"{start} - {end} - {event['summary']}\n")
-
-        # print(f"Daily schedule saved to {OUTPUT_FILE_PATH}")
     except Exception as e:
         print(f"An error occurred: {e}")
 
 # Example usage
 if __name__ == "__main__":
-    calendar_id = 'chanuthelegend@gmail.com'  # Use 'primary' for the main calendar
+    # Set your calendar ID (use 'primary' for your main calendar)
+    calendar_id = 'chanuthelegend@gmail.com'
 
-    # Get the current date
+    # Get the current date in YYYY-MM-DD format
     date = datetime.now().strftime('%Y-%m-%d')
-    # print(f"Using current date: {date}")
 
-    # calendar_list = service.calendarList().list().execute()
-    # calendars = calendar_list.get('items', [])
-    # for calendar in calendars:
-    #     print(f"ID: {calendar['id']}, Name: {calendar['summary']}")
-
-
-    # Delete events from file
+    # Path to the file containing events to delete
     delete_events_file_path = os.path.join(os.path.dirname(__file__), 'delete_events.txt')
+    # Delete events listed in delete_events.txt
     delete_events_from_file(calendar_id, delete_events_file_path)
 
-    # Download daily schedule
+    # Download and save the daily schedule
     download_daily_schedule(calendar_id, date)
