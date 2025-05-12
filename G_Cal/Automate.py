@@ -176,7 +176,8 @@ def download_daily_schedule(calendar_id, date):
 # Example usage
 if __name__ == "__main__":
     # Set your calendar ID (use 'primary' for your main calendar)
-    calendar_id = 'chanuthelegend@gmail.com'
+    calendar_id = 'primary'  # or set to your calendar ID as an environment variable
+    # Optionally, you can use: calendar_id = os.environ.get('GOOGLE_CALENDAR_ID', 'primary')
 
     # Get the current date in YYYY-MM-DD format
     date = datetime.now().strftime('%Y-%m-%d')
