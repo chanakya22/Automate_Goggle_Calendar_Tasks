@@ -29,23 +29,27 @@ This project automates Google Calendar management using Python. It allows you to
 
 ## Usage
 
-1. **Prepare `delete_events.txt`**
-   - Each line should be in the format:
-     ```
-     <start> - <end> - <event summary>
-     ```
-     Example:
-     ```
-     2025-05-11T09:00:00-05:00 - 2025-05-11T10:00:00-05:00 - Meeting with Bob
-     ```
+You can either:
+- **Download the events first** to see your daily schedule and get the correct format for deletion, or
+- **Delete events directly** if you already know the required format for `delete_events.txt`.
 
-2. **Run the script**
+### 1. Prepare `delete_events.txt`
+- Each line should be in the format:
+  ```
+  <start> - <end> - <event summary>
+  ```
+  Example:
+  ```
+  2025-05-11T09:00:00-05:00 - 2025-05-11T10:00:00-05:00 - Meeting with Bob
+  ```
+
+### 2. Run the script
    ```sh
    python G_Cal/Automate.py
    ```
 
    - The script will:
-     - Delete events listed in `delete_events.txt` for the current day.
+     - Delete events listed in `delete_events.txt` for the current day (if present).
      - Download your daily schedule to `daily_schedule.txt`.
 
 ## Notes
